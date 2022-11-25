@@ -1,6 +1,27 @@
 import PySimpleGUI as sg
 from database import *
 
+
+# PEER CODE
+import socket 
+
+IP = socket.gethostbyname(socket.gethostname())
+PORT = 4500 
+ADDR = (IP, PORT)
+FORMAT = "utf-8"
+DISCONNECT_MSG = ":disconnect"
+SIZE = 1024
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client.connect(ADDR)
+
+
+
+# ---------
+
+
+
+
 sg.theme('DarkAmber')
 
 start_layout = [[sg.Text('Welcome to P2P Chat')],
@@ -20,6 +41,7 @@ message_layout = [[sg.Text(key='receiver')],
 chat_layout = [[sg.Column(friend_list_layout, element_justification='c', key="left_col", pad=(20,20)),
                 sg.Column(message_layout, key="right_col")]]
 register_layout = [[sg.Text('Register your account')],
+                   [sg.Text('User Existed!',text_color="red", visible=False, key="reg_error")],
                    [sg.Text('Username: '), sg.Input()],
                    [sg.Text('Password: '), sg.Input(password_char="*")],
                    [sg.Button('Back'),sg.Button('Register', pad=(10,20))]]
@@ -31,16 +53,23 @@ layout = [[sg.Column(start_layout, key="col_start", element_justification='c'),
 current_layout = "start"
 
 def handle_register(username, password):
-  add_user(username, password)
+  client.send(f":register {username} {password}".encode(FORMAT))
+  state = client.recv(SIZE).decode(FORMAT)
+  return True if state == "True" else False
 
 def handle_login(username, password):
   global current_layout
   global window
-  state = authenticate(username, password)
-  if state == False:
+  # Send the username and password to authenticate
+  client.send(f":authenticate {username} {password}".encode(FORMAT))
+  # Server return a string
+  state = client.recv(SIZE).decode(FORMAT)
+  if state == "False":
     window.Element("error").update(visible=True)
   else:
+    # Update the connection_list
     window['col_start'].update(visible=False)
+    window.Element("error").update(visible=False)
     current_layout='chat'
     window['col_chat'].update(visible=True)
 
@@ -58,6 +87,10 @@ def hide_register_layout():
 def handle_chat_layout(event, values):
   global current_layout
   global window
+  # Get connection list
+  #client.send(":get_list".encode(FORMAT))
+  
+
   # Update username 
   window['username'].update(f"Username: {values[0]}")
   window['left_col'].Widget.configure(borderwidth=1, relief=sg.DEFAULT_FRAME_RELIEF)
@@ -79,6 +112,7 @@ while True:
     event, values = window.read()
     print(event, values)
     if event == sg.WIN_CLOSED:
+        client.send(DISCONNECT_MSG.encode(FORMAT))
         break
     elif event == "Register":
       window[f'col_{current_layout}'].update(visible=False)
@@ -90,8 +124,12 @@ while True:
 
     # Handle Register 
     if event == "Register0" and current_layout == "register":
-      handle_register(values[2], values[3])
-      hide_register_layout()
+      print(values[3], values[4])
+      state = handle_register(values[3], values[4])
+      if state == True:
+        hide_register_layout()
+      else:
+        window.Element("reg_error").update(visible=True)
 
     if event == "Login" and current_layout == "start":
       handle_login(values[0], values[1])

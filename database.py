@@ -19,13 +19,20 @@ log_db = client.user_history
 
 # Add a user after registration 
 def add_user(username, password):
-  # collection name users 
+  # Collection name users 
   user = {
     "username": username,
     "password": password,
     "friend_list": []
   }  
-  db.users.insert_one(user) 
+  # Check if user is already existed 
+  existed_user = db.users.find_one({"username": username})
+  if existed_user == None:
+    db.users.insert_one(user) 
+    return True
+  else:
+    return False
+
 
 def add_history(friend_username, messages):
   print(user)
