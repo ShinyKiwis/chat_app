@@ -35,7 +35,7 @@ def add_history(friend_username, messages):
     friend_user = db.users.find_one({"username": friend_username})
     chat_log = {
       "from_id": friend_user["_id"],
-      "messages": messages 
+      "messages": messages
     }
     log_db.messages.insert_one(chat_log)
 

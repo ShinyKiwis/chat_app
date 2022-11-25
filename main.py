@@ -10,13 +10,15 @@ start_layout = [[sg.Text('Welcome to P2P Chat')],
                 [sg.Button('Login', pad=(10, 20)), sg.Button('Register')]]
 
 friend_list_layout = [[sg.Text(key="username")],
-                      [sg.Listbox(values=[], size=(20, 10), key="friend_list")],
+                      [sg.Listbox(values=[], size=(20, 10), key="friend_list", no_scrollbar=False, enable_events=True)],
                       [sg.Button('Logout', pad=((0,0), (50,20)))]]
 
-message_layout = [[sg.Text('MessageBox')]]
+message_layout = [[sg.Text(key='receiver')],
+                  [sg.Listbox(values=['[binh]: Hello','[nguyen]: Hi'], expand_x=True, size=(0,15), key="chat_box", no_scrollbar=True)],
+                  [sg.Button("Upload"), sg.Input(), sg.Button('Send')]]
 
 chat_layout = [[sg.Column(friend_list_layout, element_justification='c', key="left_col", pad=(20,20)),
-                sg.Column(message_layout)]]
+                sg.Column(message_layout, key="right_col")]]
 register_layout = [[sg.Text('Register your account')],
                    [sg.Text('Username: '), sg.Input()],
                    [sg.Text('Password: '), sg.Input(password_char="*")],
@@ -66,13 +68,22 @@ def handle_chat_layout(event, values):
     window['col_start'].update(visible=True)
 
   # Get friend list here and update it
-  friends = ["binh", "duy", "anna"]
+  friends = ["binh - [FRIEND]", "duy", "anna", "tam", "hue", "an", "bao", "huy", "test", "liem", "pikachu"]
   window['friend_list'].update(values=friends)
+  receiver = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0] 
+  print(receiver)
+  window['receiver'].update(f"Receiver: {receiver}")
 
 
 while True:
     event, values = window.read()
     print(event, values)
+    if event == sg.WIN_CLOSED:
+        break
+    elif event == "Register":
+      window[f'col_{current_layout}'].update(visible=False)
+      current_layout = "register"
+      window[f'col_register'].update(visible=True)
     # Handle back to login screen
     if event == "Back" and current_layout == "register":
       hide_register_layout()
@@ -88,14 +99,5 @@ while True:
     # Handle chat message
     if current_layout == "chat":
       handle_chat_layout(event, values)
-
-
-    if event == sg.WIN_CLOSED:
-        break
-    elif event == "Register":
-      window[f'col_{current_layout}'].update(visible=False)
-      current_layout = "register"
-      window[f'col_register'].update(visible=True)
-    
 
 window.close()
