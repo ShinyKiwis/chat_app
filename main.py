@@ -6,11 +6,11 @@ from database import *
 import socket 
 
 IP = socket.gethostbyname(socket.gethostname())
-PORT = 4500 
+PORT = 3007 
 ADDR = (IP, PORT)
 FORMAT = "utf-8"
 DISCONNECT_MSG = ":disconnect"
-SIZE = 1024
+SIZE = 4096
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect(ADDR)
@@ -18,8 +18,8 @@ client.connect(ADDR)
 
 
 # ---------
-
-
+active_list = []
+global_username = ''
 
 
 sg.theme('DarkAmber')
@@ -29,6 +29,7 @@ start_layout = [[sg.Text('Welcome to P2P Chat')],
                 [sg.Text('Username: '), sg.Input()],
                 [sg.Text('Password:  '), sg.Input(password_char="*")],
                 [sg.Button('Login', pad=(10, 20)), sg.Button('Register')]]
+
 
 friend_list_layout = [[sg.Text(key="username")],
                       [sg.Listbox(values=[], size=(20, 10), key="friend_list", no_scrollbar=False, enable_events=True)],
@@ -40,6 +41,7 @@ message_layout = [[sg.Text(key='receiver')],
 
 chat_layout = [[sg.Column(friend_list_layout, element_justification='c', key="left_col", pad=(20,20)),
                 sg.Column(message_layout, key="right_col")]]
+
 register_layout = [[sg.Text('Register your account')],
                    [sg.Text('User Existed!',text_color="red", visible=False, key="reg_error")],
                    [sg.Text('Username: '), sg.Input()],
@@ -67,11 +69,13 @@ def handle_login(username, password):
   if state == "False":
     window.Element("error").update(visible=True)
   else:
+    global global_username
     # Update the connection_list
     window['col_start'].update(visible=False)
     window.Element("error").update(visible=False)
     current_layout='chat'
     window['col_chat'].update(visible=True)
+    global_username = username
 
 
 window = sg.Window('P2P Chat', layout)
@@ -88,8 +92,26 @@ def handle_chat_layout(event, values):
   global current_layout
   global window
   # Get connection list
-  #client.send(":get_list".encode(FORMAT))
-  
+  client.send(":get_list".encode(FORMAT))
+  addr_list = client.recv(SIZE).decode(FORMAT).split(" ")
+  addr_list.pop(-1)
+  for ele in addr_list:
+    [addr_name, addr] = ele.split("-")
+    tmp = addr.replace('(','').replace(')','').replace(' ','').replace('\'','').split(",")
+    tmp[1] = int(tmp[1])
+    user_conn = {
+      f'{addr_name}': tuple(tmp)  
+    }
+    for user in active_list:
+      for username,_ in user.items():
+        if(username == addr_name):
+          continue
+    active_list.append(user_conn)
+    print(active_list)
+  #   print("12#!23123123")
+  #   # active_list.append(tuple(tmp))
+
+
 
   # Update username 
   window['username'].update(f"Username: {values[0]}")
@@ -99,18 +121,34 @@ def handle_chat_layout(event, values):
     window['col_chat'].update(visible=False)
     current_layout="start"
     window['col_start'].update(visible=True)
+    for idx, user in enumerate(active_list):
+      for username,_ in user.items():
+        if username == global_username:
+          active_list.pop(idx)
+          print(active_list)
 
   # Get friend list here and update it
-  friends = ["binh - [FRIEND]", "duy", "anna", "tam", "hue", "an", "bao", "huy", "test", "liem", "pikachu"]
+  friends = []
+  print(active_list)
+  for user in active_list:
+    for username,_ in user.items():
+      if username not in friends and global_username != username:
+        friends.append(username)
   window['friend_list'].update(values=friends)
   receiver = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0] 
-  print(receiver)
   window['receiver'].update(f"Receiver: {receiver}")
+
+  # messages = []
+  # receive messages
+  # while True:
+  #   window['chat'].update()
+
 
 
 while True:
     event, values = window.read()
-    print(event, values)
+    # print(event, values)
+    # Update active list when new connection established
     if event == sg.WIN_CLOSED:
         client.send(DISCONNECT_MSG.encode(FORMAT))
         break

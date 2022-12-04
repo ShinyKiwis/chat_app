@@ -3,8 +3,11 @@ import threading
 import sys
 import os
 import tqdm
+from database import *
 
-
+connection_list=[]
+name_list = []
+addr_list=[]
 FORMAT="utf-8"
 host=socket.gethostbyname(socket.gethostname())
 ADDR=(host,3007)
@@ -25,24 +28,37 @@ server.listen()
 def on_new_connection(conn,addr):
     connected=True
     while connected:
-        try:
-            request=conn.recv(4096).decode(FORMAT)
-        except:
+        request=conn.recv(4096).decode(FORMAT)
+        commands = request.split(" ")
+        if commands[0] == ":authenticate":
+          state = authenticate(commands[1], commands[2])
+          if state:
+            name_list.append(commands[1])
+          conn.send(str(state).encode(FORMAT))
+        elif commands[0] == ":register":
+          state = add_user(commands[1], commands[2])
+          conn.send(str(state).encode(FORMAT))
+        elif commands[0] ==":get_list":
+            # conn.send(str(f'{len(addr_list)} ').encode(FORMAT))
+            # msg = str(len(name_list))
+            msg = ""
+            for idx, ele in enumerate(name_list):
+                #connect to database to get name
+                # conn.send(ele.encode(FORMAT))
+                msg += f"{ele}-({addr_list[idx][0]},{str(addr_list[idx][1])}) "
+                # msg=" ("+addr_list[idx][0]+","+str(addr_list[idx][1])+")"
+                print(msg)
+            msg=msg.encode(FORMAT)
+            conn.send(msg)
+        elif commands[0] == ":disconnect":
             print(addr," disconnected!")
             connection_list.remove(conn)
+            print(name_list)
+            print(addr_list.index(addr))
+            name_list.pop(addr_list.index(addr))
             addr_list.remove(addr)
+            print("Total connection: ",len(connection_list))
             return
-            
-        if request=="1":
-            for i in addr_list:
-                #connect to database to get name
-                msg="("+i[0]+", "+str(i[1])+")"
-                msg=msg.encode(FORMAT)
-                conn.send(msg)
-        elif request=="connect":
-            msg="send who nig?".encode(FORMAT)
-            conn.send(msg)
-            msg=conn.recv(4096).decode(FORMAT)
         elif request=="file.msg":
             receiver(conn)
             continue
@@ -92,8 +108,7 @@ def receiver(client_socket):
     
 
 
-connection_list=[]
-addr_list=[]
+
 while True:
     conn,addr=server.accept()
     connection_list.append(conn)
