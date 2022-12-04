@@ -18,7 +18,7 @@ client.connect(ADDR)
 
 
 # ---------
-active_list = []
+active_list = {}
 global_username = ''
 
 
@@ -93,22 +93,26 @@ def handle_chat_layout(event, values):
   global window
   # Get connection list
   client.send(":get_list".encode(FORMAT))
-  addr_list = client.recv(SIZE).decode(FORMAT).split(" ")
-  addr_list.pop(-1)
+  addr_list = client.recv(SIZE).decode(FORMAT).strip().split(" ")
+  temp_name = []
+  print("addr_list: ", addr_list)
+  print("active_list: ", active_list)
+  # If there is changes in the connection_list, renew it
   for ele in addr_list:
     [addr_name, addr] = ele.split("-")
+    temp_name.append(addr_name)
+    if global_username == addr_name or addr_name in active_list:
+      continue
+    # Parse the message to tuple for chatting later
     tmp = addr.replace('(','').replace(')','').replace(' ','').replace('\'','').split(",")
     tmp[1] = int(tmp[1])
-    user_conn = {
-      f'{addr_name}': tuple(tmp)  
-    }
-    for user in active_list:
-      for username,_ in user.items():
-        if(username == addr_name):
-          continue
-    active_list.append(user_conn)
-    print(active_list)
-  #   print("12#!23123123")
+    active_list[f'{addr_name}'] = tuple(tmp)
+  # Check if a user is remove 
+  for username in active_list.keys():
+    if username not in temp_name:
+      active_list.pop(username)
+      break
+  print(active_list)
   #   # active_list.append(tuple(tmp))
 
 
@@ -121,19 +125,21 @@ def handle_chat_layout(event, values):
     window['col_chat'].update(visible=False)
     current_layout="start"
     window['col_start'].update(visible=True)
-    for idx, user in enumerate(active_list):
-      for username,_ in user.items():
-        if username == global_username:
-          active_list.pop(idx)
-          print(active_list)
+    # Remove user in central server
+    client.send(DISCONNECT_MSG.encode(FORMAT)) 
+    # Pop it in active list 
+    # for idx, user in enumerate(active_list):
+    #   for username,_ in user.items():
+    #     if username == global_username:
+    #       active_list.pop(idx)
+          # print(active_list)
 
   # Get friend list here and update it
   friends = []
-  print(active_list)
-  for user in active_list:
-    for username,_ in user.items():
-      if username not in friends and global_username != username:
-        friends.append(username)
+  # print(active_list)
+  for username in active_list.keys():
+    friends.append(username)
+
   window['friend_list'].update(values=friends)
   receiver = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0] 
   window['receiver'].update(f"Receiver: {receiver}")
