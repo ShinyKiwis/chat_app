@@ -1,6 +1,7 @@
 import PySimpleGUI as sg
 from database import *
-
+import sys
+import threading
 
 # PEER CODE
 import socket 
@@ -12,14 +13,85 @@ FORMAT = "utf-8"
 DISCONNECT_MSG = ":disconnect"
 SIZE = 4096
 
+
+active_list = {}
+conn_list = {}
+addr_list= []
+name_list =[] 
+global_username = ''
+conn_idx = 0
+
+global_log = {}
+
+def on_new_connection(conn,flag):           #open listening thread and send thread
+    connected=True
+    while connected:
+        if flag==1:
+            msg=conn.recv(4096)
+            msg=msg.decode(FORMAT)
+            if msg=="file.msg":
+                # receiver(conn)
+                continue
+            # Find index in connection_list 
+            name = list(conn_list.values()).index(conn)
+            global_log[name].append(f'[{name}]: {msg}')
+            print(name, msg) 
+
+        else:
+            #using same chat thread for all the peers connections and server connections
+            #this thread call only once at the beginning of the connectiing to server phase
+            msg=input()
+            # if is_file==1:
+            #     send_file(msg,connection_list[0])
+            #     continue
+            
+            msg=msg.encode(FORMAT)
+            #select sender from connection_list     #start from 0
+            print("conidx: ",conn_idx)                         #print for testing
+            conn_list[0].send(msg)
+
+# Client connect to central server
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect(ADDR)
 
+# Thread for sending message
+sender=threading.Thread(target=on_new_connection,args=(client,2,))
+sender.start()
 
 
+# listening socket only
+LPORT = 0
+lclient_addr=(IP,LPORT)
+print(lclient_addr)
+lclient=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+try:
+    lclient.bind(lclient_addr)
+    print(lclient)
+except socket.error as message:
+    print('Bind failed. Error Code : '
+          + str(message[0]) + ' Message '
+          + message[1])
+    sys.exit()
+
+
+def connect_peer():                                     #listening for connection from other peer.
+    while True:
+        print("HERE")
+        connection,addr=lclient.accept()
+        # conn_list.append(connection)
+        addr_list.append(addr)        
+
+        identifier=connection.recv(4096).decode(FORMAT) #identifier first connection
+        # name_list.append(identifier)                    #name list for active connection
+        conn_list[identifier] = connection
+        print("new peer connected: ",identifier)
+        global_log[identifier] = []
+        #open listen thread only 
+        
+        new_sender=threading.Thread(target=on_new_connection,args=(connection,1,))      
+        new_sender.start()
+        
 # ---------
-active_list = {}
-global_username = ''
 
 
 sg.theme('DarkAmber')
@@ -52,7 +124,6 @@ layout = [[sg.Column(start_layout, key="col_start", element_justification='c'),
            sg.Column(chat_layout, key="col_chat", visible=False), 
            sg.Column(register_layout, key="col_register", visible=False, element_justification='c')]]
 
-current_layout = "start"
 
 def handle_register(username, password):
   client.send(f":register {username} {password}".encode(FORMAT))
@@ -78,7 +149,6 @@ def handle_login(username, password):
     global_username = username
 
 
-window = sg.Window('P2P Chat', layout)
 
 def hide_register_layout():
   global current_layout
@@ -149,37 +219,49 @@ def handle_chat_layout(event, values):
   # while True:
   #   window['chat'].update()
 
+current_layout = "start"
+window = sg.Window('P2P Chat', layout)
 
+def app_process(control):
+    global current_layout
+    if control == 1:
+  # Main loop for GUI
+      while True:
+        event, values = window.read()
+        print(event, values)
+        # Update active list when new connection established
+        if event == sg.WIN_CLOSED:
+            client.send(DISCONNECT_MSG.encode(FORMAT))
+            break
+        elif event == "Register":
+          window[f'col_{current_layout}'].update(visible=False)
+          current_layout = "register"
+          window[f'col_register'].update(visible=True)
+        # Handle back to login screen
+        if event == "Back" and current_layout == "register":
+          hide_register_layout()
 
-while True:
-    event, values = window.read()
-    # print(event, values)
-    # Update active list when new connection established
-    if event == sg.WIN_CLOSED:
-        client.send(DISCONNECT_MSG.encode(FORMAT))
-        break
-    elif event == "Register":
-      window[f'col_{current_layout}'].update(visible=False)
-      current_layout = "register"
-      window[f'col_register'].update(visible=True)
-    # Handle back to login screen
-    if event == "Back" and current_layout == "register":
-      hide_register_layout()
+        # Handle Register 
+        if event == "Register0" and current_layout == "register":
+          print(values[3], values[4])
+          state = handle_register(values[3], values[4])
+          if state == True:
+            hide_register_layout()
+          else:
+            window.Element("reg_error").update(visible=True)
 
-    # Handle Register 
-    if event == "Register0" and current_layout == "register":
-      print(values[3], values[4])
-      state = handle_register(values[3], values[4])
-      if state == True:
-        hide_register_layout()
-      else:
-        window.Element("reg_error").update(visible=True)
+        if event == "Login" and current_layout == "start":
+          handle_login(values[0], values[1])
 
-    if event == "Login" and current_layout == "start":
-      handle_login(values[0], values[1])
+        # Handle chat message
+        if current_layout == "chat":
+          handle_chat_layout(event, values)
+      window.close()
+    else:
+      connect_peer()
 
-    # Handle chat message
-    if current_layout == "chat":
-      handle_chat_layout(event, values)
+gui=threading.Thread(target=app_process,args=(1,))
+chat_process=threading.Thread(target=app_process,args=(2,))
+gui.start()
+chat_process.start()
 
-window.close()
