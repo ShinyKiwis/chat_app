@@ -32,8 +32,12 @@ def on_new_connection(conn,addr):
         commands = request.split(" ")
         if commands[0] == ":authenticate":
           state = authenticate(commands[1], commands[2])
+          print(commands)
           if state:
             name_list.append(commands[1])
+            print(commands[3] + commands[4])
+            addr_list.append(commands[3]+commands[4])
+            print(addr_list)
           conn.send(str(state).encode(FORMAT))
         elif commands[0] == ":register":
           state = add_user(commands[1], commands[2])
@@ -45,7 +49,8 @@ def on_new_connection(conn,addr):
             for idx, ele in enumerate(name_list):
                 #connect to database to get name
                 # conn.send(ele.encode(FORMAT))
-                msg += f"{ele}-({addr_list[idx][0]},{str(addr_list[idx][1])}) "
+                # msg += f"{ele}-({addr_list[idx][0]},{str(addr_list[idx][1])}) "
+                msg += f"{ele}-{addr_list[idx]} "
                 # msg=" ("+addr_list[idx][0]+","+str(addr_list[idx][1])+")"
                 print(msg)
             msg=msg.encode(FORMAT)
@@ -110,13 +115,14 @@ def receiver(client_socket):
 
 
 while True:
+    toggle = input()
+    if toggle == 1:
+      server.close()
     conn,addr=server.accept()
     connection_list.append(conn)
-    addr_list.append(addr)
+    # addr_list.append(addr)
     print(addr_list)
     print("New connection [",addr,"] connected!\n")
     print("Total connection: ",len(connection_list))
     thread=threading.Thread(target=on_new_connection,args=(conn,addr,))
     thread.start()
-
-

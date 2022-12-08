@@ -20,7 +20,7 @@ addr_list= []
 name_list =[] 
 global_username = ''
 conn_idx = 0
-
+global_peer = ''
 global_log = {}
 
 def on_new_connection(conn,flag):           #open listening thread and send thread
@@ -53,7 +53,7 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
             msg=msg.encode(FORMAT)
             #select sender from connection_list     #start from 0
             print("conidx: ",conn_idx)                         #print for testing
-            conn_list['binh'].send(msg)
+            conn_list[global_peer].send(msg)
 
 # Client connect to central server
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -72,7 +72,7 @@ lclient=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 try:
     lclient.bind(lclient_addr)
     lclient.listen()
-    print(lclient)
+    lclient_addr = lclient.getsockname()
 except socket.error as message:
     print('Bind failed. Error Code : '
           + str(message[0]) + ' Message '
@@ -115,7 +115,7 @@ friend_list_layout = [[sg.Text(key="username")],
                       [sg.Button('Logout', pad=((0,0), (50,20)))]]
 
 message_layout = [[sg.Text(key='receiver')],
-                  [sg.Listbox(values=['[binh]: Hello','[nguyen]: Hi'], expand_x=True, size=(0,15), key="chat_box", no_scrollbar=True)],
+                  [sg.Listbox(values=[], expand_x=True, size=(0,15), key="chat_box", no_scrollbar=True)],
                   [sg.Button("Upload"), sg.Input(), sg.Button('Send')]]
 
 chat_layout = [[sg.Column(friend_list_layout, element_justification='c', key="left_col", pad=(20,20)),
@@ -141,7 +141,7 @@ def handle_login(username, password):
   global current_layout
   global window
   # Send the username and password to authenticate
-  client.send(f":authenticate {username} {password}".encode(FORMAT))
+  client.send(f":authenticate {username} {password} {lclient_addr}".encode(FORMAT))
   # Server return a string
   state = client.recv(SIZE).decode(FORMAT)
   if state == "False":
@@ -168,6 +168,7 @@ def hide_register_layout():
 def handle_chat_layout(event, values):
   global current_layout
   global window
+  global global_peer
   # Get connection list
   client.send(":get_list".encode(FORMAT))
   addr_list = client.recv(SIZE).decode(FORMAT).strip().split(" ")
@@ -189,7 +190,7 @@ def handle_chat_layout(event, values):
     if username not in temp_name:
       active_list.pop(username)
       break
-  print(active_list)
+  # print(active_list
   #   # active_list.append(tuple(tmp))
 
 
@@ -220,11 +221,34 @@ def handle_chat_layout(event, values):
   window['friend_list'].update(values=friends)
   receiver = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0] 
   window['receiver'].update(f"Receiver: {receiver}")
+  # Check if in name list 
+  if receiver != "Choose a user to start chatting":
+    if receiver not in name_list:
+      global_peer = receiver
+      active_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+      active_conn.bind((IP, 0))
+      try:
+        print("[DEBUG]: ", active_list[receiver])
+        active_conn.connect(active_list[receiver]) 
+        print("[DEBUG]: ", active_conn)
+      except:
+        print("LOI ME ROI")
+      # Add to conn_list 
+      conn_list[receiver] = active_conn
+      # Append to name list 
+      global_log[receiver] = []
+      name_list.append(receiver)
+      print(global_username)
+      active_conn.send(global_username.encode(FORMAT))
+      rec = threading.Thread(target=on_new_connection, args=(active_conn, 1,))
+      rec.start()
 
-  # messages = []
-  # receive messages
-  # while True:
-  #   window['chat'].update()
+    window['chat_box'].update(values=global_log[receiver]) 
+  
+
+
+
+
 
 current_layout = "start"
 window = sg.Window('P2P Chat', layout)
