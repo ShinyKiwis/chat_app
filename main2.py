@@ -20,7 +20,7 @@ addr_list= []
 name_list =[] 
 global_username = ''
 conn_idx = 0
-global_peer = ''
+global_peer = "Choose a user to start chatting"
 global_log = {}
 
 def on_new_connection(conn,flag):           #open listening thread and send thread
@@ -114,7 +114,7 @@ friend_list_layout = [[sg.Text(key="username")],
                       [sg.Listbox(values=[], size=(20, 10), key="friend_list", no_scrollbar=False, enable_events=True)],
                       [sg.Button('Logout', pad=((0,0), (50,20)))]]
 
-message_layout = [[sg.Text(key='receiver')],
+message_layout = [[sg.Text(f"Receiver: {global_peer}",key='receiver')],
                   [sg.Listbox(values=[], expand_x=True, size=(0,15), key="chat_box", no_scrollbar=True)],
                   [sg.Button("Upload"), sg.Input(), sg.Button('Send')]]
 
@@ -140,6 +140,7 @@ def handle_register(username, password):
 def handle_login(username, password):
   global current_layout
   global window
+  global global_peer
   # Send the username and password to authenticate
   client.send(f":authenticate {username} {password} {lclient_addr}".encode(FORMAT))
   # Server return a string
@@ -170,6 +171,7 @@ def handle_chat_layout(event, values):
   global window
   global global_peer
   # Get connection list
+  print(event)
   client.send(":get_list".encode(FORMAT))
   addr_list = client.recv(SIZE).decode(FORMAT).strip().split(" ")
   temp_name = []
@@ -213,38 +215,46 @@ def handle_chat_layout(event, values):
           # print(active_list)
 
   # Get friend list here and update it
-  friends = []
-  # print(active_list)
-  for username in active_list.keys():
-    friends.append(username)
+  if event == 'friend_list':
+    friends = []
+    print(active_list)
+    for username in active_list.keys():
+      friends.append(username)
+    
+    print("FRIENDS: ", friends)
 
-  window['friend_list'].update(values=friends)
-  receiver = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0] 
-  window['receiver'].update(f"Receiver: {receiver}")
+    window['friend_list'].update(values=friends)
+    global_peer = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0]
+    window['receiver'].update(f"Receiver: {global_peer}")
   # Check if in name list 
-  if receiver != "Choose a user to start chatting":
-    if receiver not in name_list:
-      global_peer = receiver
+  if global_peer != "Choose a user to start chatting":
+    if global_peer not in name_list:
+      global_peer = global_peer
       active_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       active_conn.bind((IP, 0))
       try:
-        print("[DEBUG]: ", active_list[receiver])
-        active_conn.connect(active_list[receiver]) 
+        print("[DEBUG]: ", active_list[global_peer])
+        active_conn.connect(active_list[global_peer]) 
         print("[DEBUG]: ", active_conn)
       except:
         print("LOI ME ROI")
       # Add to conn_list 
-      conn_list[receiver] = active_conn
+      conn_list[global_peer] = active_conn
       # Append to name list 
-      global_log[receiver] = []
-      name_list.append(receiver)
-      print(global_username)
+      global_log[global_peer] = []
+      name_list.append(global_peer)
       active_conn.send(global_username.encode(FORMAT))
       rec = threading.Thread(target=on_new_connection, args=(active_conn, 1,))
       rec.start()
 
-    window['chat_box'].update(values=global_log[receiver]) 
+    if event == "Send":
+      if(values[2] != ''):
+        global_log[global_peer].append(f"[{global_username}]: {values[2]}")
+        window.refresh()
+
+    window['chat_box'].update(values=global_log[global_peer]) 
   
+
 
 
 
