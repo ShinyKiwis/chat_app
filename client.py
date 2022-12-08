@@ -63,7 +63,7 @@ def send_file(filename,s):
     print("[+] Connected.")
     """
     # send the filename and filesize
-    s.send("file.msg".encode())         #send identifier as  file sending
+    s.send("file.msg".encode(FORMAT))         #send identifier as  file sending
     s.send(f"{filename}{SEPARATOR}{filesize}".encode())
 
     # start sending the file
@@ -87,7 +87,48 @@ def send_file(filename,s):
 
 #############################################################
 
+################### TO RECEIVE FILE #########################
+def receiver(s):
+    # receive the file infos
+    # receive using client socket, not server socket
+    received = s.recv(BUFFER_SIZE).decode()                        #HERER
+    print(received)
+    filename, filesize = received.split(SEPARATOR)
+    # remove absolute path if there is
+    filename = os.path.basename(filename)
+    # convert to integer
+    filesize = int(filesize)
+    # start receiving the file from the socket
+    # and writing to the file stream
+    progress = tqdm.tqdm(range(filesize), f"Receiving {filename}", unit="B", unit_scale=True, unit_divisor=1024)
 
+    new_filename="new"+filename
+
+    with open(new_filename, "wb") as f:
+        while True:
+            # read 1024 bytes from the socket (receive)
+            bytes_read = s.recv(BUFFER_SIZE)                           #HERER
+            if  len(bytes_read)!=BUFFER_SIZE:    
+                # nothing is received
+                # file transmitting is done
+                f.close()
+                break
+            # write to the file the bytes we just received
+            print(len(bytes_read))
+            f.write(bytes_read)
+            # update the progress bar
+            progress.update(len(bytes_read))
+    print("file rec done") 
+    return
+    # close the client socket
+    #client_socket.close()
+    # close the server socket
+    
+#file receiving  
+
+
+
+#############################################################
 
 
 
@@ -101,7 +142,11 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
     while connected:
         if flag==1:
             msg=conn.recv(4096)
-            print(msg.decode(FORMAT))
+            msg=msg.decode(FORMAT)
+            if msg=="file.msg":
+                receiver(conn)
+                continue
+            print(msg)
         else:
             #using same chat thread for all the peers connections and server connections
             #this thread call only once at the beginning of the connectiing to server phase
