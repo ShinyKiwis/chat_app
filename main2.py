@@ -23,6 +23,40 @@ conn_idx = 0
 global_peer = "Choose a user to start chatting"
 global_log = {}
 
+sg.theme('DarkAmber')
+
+start_layout = [[sg.Text('Welcome to P2P Chat')],
+                [sg.Text('Invalid Credential',text_color="red", visible=False, key="error")],
+                [sg.Text('Username: '), sg.Input()],
+                [sg.Text('Password:  '), sg.Input(password_char="*")],
+                [sg.Button('Login', pad=(10, 20)), sg.Button('Register')]]
+
+
+friend_list_layout = [[sg.Text(key="username")],
+                      [sg.Listbox(values=[], size=(20, 10), key="friend_list", no_scrollbar=False, enable_events=True)],
+                      [sg.Button('Logout', pad=((0,0), (50,20)))]]
+
+message_layout = [[sg.Text(f"Receiver: {global_peer}",key='receiver')],
+                  [sg.Listbox(values=[], expand_x=True, size=(0,15), key="chat_box", no_scrollbar=True)],
+                  [sg.Button("Upload"), sg.Input(), sg.Button('Send')]]
+
+chat_layout = [[sg.Column(friend_list_layout, element_justification='c', key="left_col", pad=(20,20)),
+                sg.Column(message_layout, key="right_col")]]
+
+register_layout = [[sg.Text('Register your account')],
+                   [sg.Text('User Existed!',text_color="red", visible=False, key="reg_error")],
+                   [sg.Text('Username: '), sg.Input()],
+                   [sg.Text('Password: '), sg.Input(password_char="*")],
+                   [sg.Button('Back'),sg.Button('Register', pad=(10,20))]]
+
+layout = [[sg.Column(start_layout, key="col_start", element_justification='c'), 
+           sg.Column(chat_layout, key="col_chat", visible=False), 
+           sg.Column(register_layout, key="col_register", visible=False, element_justification='c')]]
+
+
+current_layout = "start"
+window = sg.Window('P2P Chat', layout)
+
 def on_new_connection(conn,flag):           #open listening thread and send thread
     connected=True
     while connected:
@@ -39,6 +73,7 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
             # name = list(conn_list.values()).index(conn)
             name = key_list[pos]
             global_log[name].append(f'[{name}]: {msg}')
+            window.refresh()
             # global_log[global_log[name][0]] = global_log[name][0].append(f'[{name}]: {msg}')
             print(global_log)
 
@@ -101,36 +136,6 @@ def connect_peer():                                     #listening for connectio
 # ---------
 
 
-sg.theme('DarkAmber')
-
-start_layout = [[sg.Text('Welcome to P2P Chat')],
-                [sg.Text('Invalid Credential',text_color="red", visible=False, key="error")],
-                [sg.Text('Username: '), sg.Input()],
-                [sg.Text('Password:  '), sg.Input(password_char="*")],
-                [sg.Button('Login', pad=(10, 20)), sg.Button('Register')]]
-
-
-friend_list_layout = [[sg.Text(key="username")],
-                      [sg.Listbox(values=[], size=(20, 10), key="friend_list", no_scrollbar=False, enable_events=True)],
-                      [sg.Button('Logout', pad=((0,0), (50,20)))]]
-
-message_layout = [[sg.Text(f"Receiver: {global_peer}",key='receiver')],
-                  [sg.Listbox(values=[], expand_x=True, size=(0,15), key="chat_box", no_scrollbar=True)],
-                  [sg.Button("Upload"), sg.Input(), sg.Button('Send')]]
-
-chat_layout = [[sg.Column(friend_list_layout, element_justification='c', key="left_col", pad=(20,20)),
-                sg.Column(message_layout, key="right_col")]]
-
-register_layout = [[sg.Text('Register your account')],
-                   [sg.Text('User Existed!',text_color="red", visible=False, key="reg_error")],
-                   [sg.Text('Username: '), sg.Input()],
-                   [sg.Text('Password: '), sg.Input(password_char="*")],
-                   [sg.Button('Back'),sg.Button('Register', pad=(10,20))]]
-
-layout = [[sg.Column(start_layout, key="col_start", element_justification='c'), 
-           sg.Column(chat_layout, key="col_chat", visible=False), 
-           sg.Column(register_layout, key="col_register", visible=False, element_justification='c')]]
-
 
 def handle_register(username, password):
   client.send(f":register {username} {password}".encode(FORMAT))
@@ -167,6 +172,7 @@ def hide_register_layout():
 
 
 def handle_chat_layout(event, values):
+  window.refresh()
   global current_layout
   global window
   global global_peer
@@ -250,6 +256,7 @@ def handle_chat_layout(event, values):
     if event == "Send":
       if(values[2] != ''):
         global_log[global_peer].append(f"[{global_username}]: {values[2]}")
+        conn_list[global_peer].send(f"{values[2]}".encode(FORMAT))
         window.refresh()
 
     window['chat_box'].update(values=global_log[global_peer]) 
@@ -259,9 +266,6 @@ def handle_chat_layout(event, values):
 
 
 
-
-current_layout = "start"
-window = sg.Window('P2P Chat', layout)
 
 def app_process(control):
     global current_layout
