@@ -2,6 +2,8 @@ import PySimpleGUI as sg
 from database import *
 import sys
 import threading
+import os
+import tqdm
 
 # PEER CODE
 import socket 
@@ -38,7 +40,7 @@ friend_list_layout = [[sg.Text(key="username")],
 
 message_layout = [[sg.Text(f"Receiver: {global_peer}",key='receiver')],
                   [sg.Listbox(values=[], expand_x=True, size=(0,15), key="chat_box", no_scrollbar=True)],
-                  [sg.Button("Upload"), sg.Input(), sg.Button('Send')]]
+                  [sg.FileBrowse(button_text="Upload", key='file'), sg.Input(key='chat_input'), sg.Button('Send')]]
 
 chat_layout = [[sg.Column(friend_list_layout, element_justification='c', key="left_col", pad=(20,20)),
                 sg.Column(message_layout, key="right_col")]]
@@ -56,6 +58,78 @@ layout = [[sg.Column(start_layout, key="col_start", element_justification='c'),
 
 current_layout = "start"
 window = sg.Window('P2P Chat', layout)
+SEPARATOR = "<SEPARATOR>"
+BUFFER_SIZE = 1024 * 4 #4KB
+def send_file_info(s,filename, filesize):
+    s.send(f"{filename}{SEPARATOR}{filesize}".encode(FORMAT))
+    progress = tqdm.tqdm(range(filesize), f"Sending {filename}", unit="B", unit_scale=True, unit_divisor=1024)
+    with open(filename, "rb") as f:
+        while True:
+            # read the bytes from the file
+            bytes_read = f.read(BUFFER_SIZE)
+            if not bytes_read:
+                # file transmitting is done
+                f.close()
+                break
+            # we use sendall to assure transimission in 
+            # busy networks
+            s.sendall(bytes_read)
+            # update the progress bar
+            progress.update(len(bytes_read))
+    return
+
+
+def send_file(filename,s):
+    # get the file size
+    filesize = os.path.getsize(filename)
+    # create the client socket
+    """
+    s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    #print(f"[+] Connecting to {host}:{port}")
+    s.connect(addr)
+    print("[+] Connected.")
+    """
+    # send the filename and filesize
+    s.send("file.msg".encode(FORMAT))
+    send_file_info(s,filename, filesize)
+
+    # start sending the file
+   
+    return
+
+def receiver(s):
+    # receive the file infos
+    # receive using client socket, not server socket
+    received = s.recv(BUFFER_SIZE).decode()                        #HERER
+    filename, filesize = received.split(SEPARATOR)
+    # remove absolute path if there is
+    filename = os.path.basename(filename)
+    # convert to integer
+    filesize = int(filesize)
+    if not os.path.exists(global_username):
+      os.mkdir(global_username)
+    # start receiving the file from the socket
+    # and writing to the file stream
+    progress = tqdm.tqdm(range(filesize), f"Receiving {filename}", unit="B", unit_scale=True, unit_divisor=1024)
+
+    new_filename=f"{global_username}/"+ filename
+
+    with open(new_filename, "wb") as f:
+        while True:
+            # read 1024 bytes from the socket (receive)
+            bytes_read = s.recv(BUFFER_SIZE)                           #HERER
+            if  len(bytes_read)!=BUFFER_SIZE:    
+                # nothing is received
+                # file transmitting is done
+                f.close()
+                break
+            # write to the file the bytes we just received
+            print(len(bytes_read))
+            f.write(bytes_read)
+            # update the progress bar
+            progress.update(len(bytes_read))
+    print("file rec done") 
+    return
 
 def on_new_connection(conn,flag):           #open listening thread and send thread
     connected=True
@@ -63,17 +137,21 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
         if flag==1:
             msg=conn.recv(4096)
             msg=msg.decode(FORMAT)
-            if msg=="file.msg":
-                # receiver(conn)
-                continue
             key_list = list(conn_list.keys())
             val_list = list(conn_list.values())
             pos = val_list.index(conn)
+            name = key_list[pos]
+            if "file.msg" in msg:
+                global_log[name].append(f'[{name}] sent a file')
+                window['chat_box'].update(values=global_log[global_peer]) 
+                receiver(conn)
+                continue
             # Find index in connection_list 
             # name = list(conn_list.values()).index(conn)
-            name = key_list[pos]
             global_log[name].append(f'[{name}]: {msg}')
             window.refresh()
+            window['chat_box'].update(values=global_log[global_peer]) 
+
             # global_log[global_log[name][0]] = global_log[name][0].append(f'[{name}]: {msg}')
             print(global_log)
 
@@ -174,15 +252,14 @@ def hide_register_layout():
 def handle_chat_layout(event, values):
   window.refresh()
   global current_layout
-  global window
   global global_peer
   # Get connection list
-  print(event)
+  # print(event)
   client.send(":get_list".encode(FORMAT))
   addr_list = client.recv(SIZE).decode(FORMAT).strip().split(" ")
   temp_name = []
-  print("addr_list: ", addr_list)
-  print("active_list: ", active_list)
+  # print("addr_list: ", addr_list)
+  # print("active_list: ", active_list)
   # If there is changes in the connection_list, renew it
   for ele in addr_list:
     [addr_name, addr] = ele.split("-")
@@ -223,11 +300,11 @@ def handle_chat_layout(event, values):
   # Get friend list here and update it
   if event == 'friend_list':
     friends = []
-    print(active_list)
+    # print(active_list)
     for username in active_list.keys():
       friends.append(username)
     
-    print("FRIENDS: ", friends)
+    # print("FRIENDS: ", friends)
 
     window['friend_list'].update(values=friends)
     global_peer = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0]
@@ -239,11 +316,11 @@ def handle_chat_layout(event, values):
       active_conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
       active_conn.bind((IP, 0))
       try:
-        print("[DEBUG]: ", active_list[global_peer])
+        # print("[DEBUG]: ", active_list[global_peer])
         active_conn.connect(active_list[global_peer]) 
-        print("[DEBUG]: ", active_conn)
+        # print("[DEBUG]: ", active_conn)
       except:
-        print("LOI ME ROI")
+        print("[DEBUG]: Error in connection")
       # Add to conn_list 
       conn_list[global_peer] = active_conn
       # Append to name list 
@@ -254,10 +331,17 @@ def handle_chat_layout(event, values):
       rec.start()
 
     if event == "Send":
-      if(values[2] != ''):
-        global_log[global_peer].append(f"[{global_username}]: {values[2]}")
-        conn_list[global_peer].send(f"{values[2]}".encode(FORMAT))
-        window.refresh()
+      if(values['chat_input'] != ''):
+        print("CHAT: ")
+        global_log[global_peer].append(f"[{global_username}]: {values['chat_input']}")
+        conn_list[global_peer].send(f"{values['chat_input']}".encode(FORMAT))
+        window['chat_input']('')
+      elif values['file'] != '':
+        print("FILE: ")
+        global_log[global_peer].append(f"File sent to {global_peer}")
+        send_file(values['file'], conn_list[global_peer])
+        
+      window.refresh()
 
     window['chat_box'].update(values=global_log[global_peer]) 
   
@@ -272,6 +356,7 @@ def app_process(control):
     if control == 1:
   # Main loop for GUI
       while True:
+        window.refresh()
         event, values = window.read()
         print(event, values)
         # Update active list when new connection established

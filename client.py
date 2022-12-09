@@ -102,7 +102,7 @@ def receiver(s):
     # and writing to the file stream
     progress = tqdm.tqdm(range(filesize), f"Receiving {filename}", unit="B", unit_scale=True, unit_divisor=1024)
 
-    new_filename="new"+filename
+    new_filename="new_"+filename
 
     with open(new_filename, "wb") as f:
         while True:
