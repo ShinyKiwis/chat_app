@@ -8,6 +8,8 @@ from database import *
 connection_list=[]
 name_list = []
 addr_list=[]
+# This list is used to remove connection from the list
+clean_list = []
 FORMAT="utf-8"
 host=socket.gethostbyname(socket.gethostname())
 ADDR=(host,3007)
@@ -31,13 +33,15 @@ def on_new_connection(conn,addr):
         request=conn.recv(4096).decode(FORMAT)
         commands = request.split(" ")
         if commands[0] == ":authenticate":
-          state = authenticate(commands[1], commands[2])
           print(commands)
+          state = authenticate(commands[1], commands[2])
+          # print(commands)
           if state:
             name_list.append(commands[1])
-            print(commands[3] + commands[4])
+            # print(commands[3] + commands[4])
             addr_list.append(commands[3]+commands[4])
-            print(addr_list)
+            # print(addr_list)
+            clean_list.append(addr)
           conn.send(str(state).encode(FORMAT))
         elif commands[0] == ":register":
           state = add_user(commands[1], commands[2])
@@ -52,16 +56,18 @@ def on_new_connection(conn,addr):
                 # msg += f"{ele}-({addr_list[idx][0]},{str(addr_list[idx][1])}) "
                 msg += f"{ele}-{addr_list[idx]} "
                 # msg=" ("+addr_list[idx][0]+","+str(addr_list[idx][1])+")"
-                print(msg)
+                # print(msg)
             msg=msg.encode(FORMAT)
             conn.send(msg)
         elif commands[0] == ":disconnect":
             print(addr," disconnected!")
             connection_list.remove(conn)
-            print(name_list)
-            print(addr_list.index(addr))
-            name_list.pop(addr_list.index(addr))
-            addr_list.remove(addr)
+            # print(name_list)
+            # print(addr_list.index(addr))
+            clean_idx = clean_list.index(addr)
+            clean_list.pop(clean_idx)
+            name_list.pop(clean_idx)
+            addr_list.pop(clean_idx)
             print("Total connection: ",len(connection_list))
             return
         elif request=="file.msg":
@@ -115,13 +121,15 @@ def receiver(client_socket):
 
 
 while True:
-    toggle = input()
-    if toggle == 1:
-      server.close()
+    # toggle = input()
+    # print(toggle)
+    # if toggle == 1:
+    #   server.close()
     conn,addr=server.accept()
     connection_list.append(conn)
+    print("HERE")
     # addr_list.append(addr)
-    print(addr_list)
+    # print(addr_list)
     print("New connection [",addr,"] connected!\n")
     print("Total connection: ",len(connection_list))
     thread=threading.Thread(target=on_new_connection,args=(conn,addr,))

@@ -4,6 +4,7 @@ import sys
 import threading
 import os
 import tqdm
+import platform
 
 # PEER CODE
 import socket 
@@ -61,7 +62,6 @@ window = sg.Window('P2P Chat', layout)
 SEPARATOR = "<SEPARATOR>"
 BUFFER_SIZE = 1024 * 4 #4KB
 def send_file_info(s,filename, filesize):
-    s.send(f"{filename}{SEPARATOR}{filesize}".encode(FORMAT))
     progress = tqdm.tqdm(range(filesize), f"Sending {filename}", unit="B", unit_scale=True, unit_divisor=1024)
     with open(filename, "rb") as f:
         while True:
@@ -78,7 +78,6 @@ def send_file_info(s,filename, filesize):
             progress.update(len(bytes_read))
     return
 
-
 def send_file(filename,s):
     # get the file size
     filesize = os.path.getsize(filename)
@@ -90,29 +89,46 @@ def send_file(filename,s):
     print("[+] Connected.")
     """
     # send the filename and filesize
-    s.send("file.msg".encode(FORMAT))
-    send_file_info(s,filename, filesize)
+    s.send("file.msg".encode())         #send identifier as  file sending
+    s.send(f"{filename}{SEPARATOR}{filesize}".encode())
 
     # start sending the file
-   
+    progress = tqdm.tqdm(range(filesize), f"Sending {filename}", unit="B", unit_scale=True, unit_divisor=1024)
+    with open(filename, "rb") as f:
+        while True:
+            # read the bytes from the file
+            bytes_read = f.read(BUFFER_SIZE)
+            if not bytes_read:
+                # file transmitting is done
+                f.close()
+                break
+            # we use sendall to assure transimission in 
+            # busy networks
+            s.sendall(bytes_read)
+            # update the progress bar
+            progress.update(len(bytes_read))
     return
-
 def receiver(s):
     # receive the file infos
     # receive using client socket, not server socket
-    received = s.recv(BUFFER_SIZE).decode()                        #HERER
+    received = s.recv(BUFFER_SIZE).decode()                        #HERE fixing
+    # print(received)
     filename, filesize = received.split(SEPARATOR)
     # remove absolute path if there is
     filename = os.path.basename(filename)
     # convert to integer
     filesize = int(filesize)
-    if not os.path.exists(global_username):
-      os.mkdir(global_username)
     # start receiving the file from the socket
     # and writing to the file stream
     progress = tqdm.tqdm(range(filesize), f"Receiving {filename}", unit="B", unit_scale=True, unit_divisor=1024)
 
-    new_filename=f"{global_username}/"+ filename
+    if not os.path.exists(global_username):
+      os.mkdir(global_username)
+    # Check current OS 
+    os_name = platform.system()
+    folder_seperator = '/' if os_name == 'Linux' else '\\'
+    new_filename=f"{global_username}{folder_seperator}"+filename
+    # print(new_filename)
 
     with open(new_filename, "wb") as f:
         while True:
@@ -124,11 +140,11 @@ def receiver(s):
                 f.close()
                 break
             # write to the file the bytes we just received
-            print(len(bytes_read))
+            # print(len(bytes_read))
             f.write(bytes_read)
             # update the progress bar
             progress.update(len(bytes_read))
-    print("file rec done") 
+    # print("file rec done") 
     return
 
 def on_new_connection(conn,flag):           #open listening thread and send thread
@@ -142,6 +158,7 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
             pos = val_list.index(conn)
             name = key_list[pos]
             if "file.msg" in msg:
+                # print("DEUGGGG: ", msg)
                 global_log[name].append(f'[{name}] sent a file')
                 window['chat_box'].update(values=global_log[global_peer]) 
                 receiver(conn)
@@ -153,7 +170,7 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
             window['chat_box'].update(values=global_log[global_peer]) 
 
             # global_log[global_log[name][0]] = global_log[name][0].append(f'[{name}]: {msg}')
-            print(global_log)
+            # print(global_log)
 
         else:
             #using same chat thread for all the peers connections and server connections
@@ -165,12 +182,11 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
             
             msg=msg.encode(FORMAT)
             #select sender from connection_list     #start from 0
-            print("conidx: ",conn_idx)                         #print for testing
+            # print("conidx: ",conn_idx)                         #print for testing
             conn_list[global_peer].send(msg)
 
 # Client connect to central server
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect(ADDR)
 
 # Thread for sending message
 sender=threading.Thread(target=on_new_connection,args=(client,2,))
@@ -180,7 +196,7 @@ sender.start()
 # listening socket only
 LPORT = 0
 lclient_addr=(IP,LPORT)
-print(lclient_addr)
+# print(lclient_addr)
 lclient=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 try:
     lclient.bind(lclient_addr)
@@ -195,7 +211,7 @@ except socket.error as message:
 
 def connect_peer():                                     #listening for connection from other peer.
     while True:
-        print("HERE")
+        # print("HERE")
         connection,addr=lclient.accept()
         # conn_list.append(connection)
         addr_list.append(addr)        
@@ -203,9 +219,9 @@ def connect_peer():                                     #listening for connectio
         identifier=connection.recv(1024).decode(FORMAT) #identifier first connection
         # name_list.append(identifier)                    #name list for active connection
         conn_list[identifier] = connection
-        print("new peer connected: ",identifier)
+        # print("new peer connected: ",identifier)
         global_log[identifier] = []
-        print("CONNETPEER:", global_log)
+        # print("CONNETPEER:", global_log)
         #open listen thread only 
         
         new_sender=threading.Thread(target=on_new_connection,args=(connection,1,))      
@@ -224,10 +240,19 @@ def handle_login(username, password):
   global current_layout
   global window
   global global_peer
+  global client
   # Send the username and password to authenticate
-  client.send(f":authenticate {username} {password} {lclient_addr}".encode(FORMAT))
+  try:
+    client.connect(ADDR)
+    client.send(f":authenticate {username} {password} {lclient_addr}".encode(FORMAT))
+  except:
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client.connect(ADDR)
+    client.send(f":authenticate {username} {password} {lclient_addr}".encode(FORMAT))
   # Server return a string
   state = client.recv(SIZE).decode(FORMAT)
+  print("WORKS FINE")
+  print("LOGIN: ", state)
   if state == "False":
     window.Element("error").update(visible=True)
   else:
@@ -250,7 +275,6 @@ def hide_register_layout():
 
 
 def handle_chat_layout(event, values):
-  window.refresh()
   global current_layout
   global global_peer
   # Get connection list
@@ -290,6 +314,7 @@ def handle_chat_layout(event, values):
     window['col_start'].update(visible=True)
     # Remove user in central server
     client.send(DISCONNECT_MSG.encode(FORMAT)) 
+    client.close()
     # Pop it in active list 
     # for idx, user in enumerate(active_list):
     #   for username,_ in user.items():
@@ -298,7 +323,7 @@ def handle_chat_layout(event, values):
           # print(active_list)
 
   # Get friend list here and update it
-  if event == 'friend_list':
+  if event == 'friend_list' or event == sg.TIMEOUT_KEY:
     friends = []
     # print(active_list)
     for username in active_list.keys():
@@ -307,8 +332,9 @@ def handle_chat_layout(event, values):
     # print("FRIENDS: ", friends)
 
     window['friend_list'].update(values=friends)
-    global_peer = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0]
-    window['receiver'].update(f"Receiver: {global_peer}")
+    if event == 'friend_list':
+      global_peer = "Choose a user to start chatting" if len(values['friend_list']) == 0 else values['friend_list'][0]
+      window['receiver'].update(f"Receiver: {global_peer}")
   # Check if in name list 
   if global_peer != "Choose a user to start chatting":
     if global_peer not in name_list:
@@ -332,18 +358,20 @@ def handle_chat_layout(event, values):
 
     if event == "Send":
       if(values['chat_input'] != ''):
-        print("CHAT: ")
+        # print("CHAT: ")
         global_log[global_peer].append(f"[{global_username}]: {values['chat_input']}")
         conn_list[global_peer].send(f"{values['chat_input']}".encode(FORMAT))
         window['chat_input']('')
       elif values['file'] != '':
-        print("FILE: ")
+        # print("FILE: ")
         global_log[global_peer].append(f"File sent to {global_peer}")
         send_file(values['file'], conn_list[global_peer])
         
       window.refresh()
 
+    window['chat_box'].update(global_log[global_peer],scroll_to_index=len(global_log))
     window['chat_box'].update(values=global_log[global_peer]) 
+    window.refresh()
   
 
 
@@ -356,9 +384,9 @@ def app_process(control):
     if control == 1:
   # Main loop for GUI
       while True:
-        window.refresh()
-        event, values = window.read()
-        print(event, values)
+        # window.refresh()
+        event, values = window.read(timeout=1000)
+        # print(event, values)
         # Update active list when new connection established
         if event == sg.WIN_CLOSED:
             client.send(DISCONNECT_MSG.encode(FORMAT))
@@ -375,7 +403,7 @@ def app_process(control):
 
         # Handle Register 
         if event == "Register0" and current_layout == "register":
-          print(values[3], values[4])
+          # print(values[3], values[4])
           state = handle_register(values[3], values[4])
           if state == True:
             hide_register_layout()
@@ -391,9 +419,9 @@ def app_process(control):
       window.close()
     else:
       connect_peer()
+    os._exit(1)
 
 gui=threading.Thread(target=app_process,args=(1,))
 chat_process=threading.Thread(target=app_process,args=(2,))
 gui.start()
 chat_process.start()
-
