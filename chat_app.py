@@ -5,6 +5,7 @@ import threading
 import os
 import tqdm
 import platform
+import time
 
 # PEER CODE
 import socket 
@@ -80,7 +81,7 @@ def send_file_info(s,filename, filesize):
 
 def send_file(filename,s):
     # get the file size
-    filesize = os.path.getsize(filename)
+    filesize = len(filename)
     # create the client socket
     """
     s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -90,6 +91,7 @@ def send_file(filename,s):
     """
     # send the filename and filesize
     s.send("file.msg".encode())         #send identifier as  file sending
+    time.sleep(1)
     s.send(f"{filename}{SEPARATOR}{filesize}".encode())
 
     # start sending the file
@@ -104,7 +106,7 @@ def send_file(filename,s):
                 break
             # we use sendall to assure transimission in 
             # busy networks
-            s.sendall(bytes_read)
+            s.send(bytes_read)
             # update the progress bar
             progress.update(len(bytes_read))
     return
@@ -134,7 +136,7 @@ def receiver(s):
         while True:
             # read 1024 bytes from the socket (receive)
             bytes_read = s.recv(BUFFER_SIZE)                           #HERER
-            if  len(bytes_read)!=BUFFER_SIZE:    
+            if  not bytes_read:    
                 # nothing is received
                 # file transmitting is done
                 f.close()
@@ -157,6 +159,7 @@ def on_new_connection(conn,flag):           #open listening thread and send thre
             val_list = list(conn_list.values())
             pos = val_list.index(conn)
             name = key_list[pos]
+            # print(msg)
             if "file.msg" in msg:
                 # print("DEUGGGG: ", msg)
                 global_log[name].append(f'[{name}] sent a file')
@@ -251,8 +254,8 @@ def handle_login(username, password):
     client.send(f":authenticate {username} {password} {lclient_addr}".encode(FORMAT))
   # Server return a string
   state = client.recv(SIZE).decode(FORMAT)
-  print("WORKS FINE")
-  print("LOGIN: ", state)
+  # print("WORKS FINE")
+  # print("LOGIN: ", state)
   if state == "False":
     window.Element("error").update(visible=True)
   else:
@@ -279,26 +282,29 @@ def handle_chat_layout(event, values):
   global global_peer
   # Get connection list
   # print(event)
-  client.send(":get_list".encode(FORMAT))
-  addr_list = client.recv(SIZE).decode(FORMAT).strip().split(" ")
-  temp_name = []
+  try:
+    client.send(":get_list".encode(FORMAT))
+    addr_list = client.recv(SIZE).decode(FORMAT).strip().split(" ")
+    temp_name = []
+    for ele in addr_list:
+      [addr_name, addr] = ele.split("-")
+      temp_name.append(addr_name)
+      if global_username == addr_name or addr_name in active_list:
+        continue
+      # Parse the message to tuple for chatting later
+      tmp = addr.replace('(','').replace(')','').replace(' ','').replace('\'','').split(",")
+      tmp[1] = int(tmp[1])
+      active_list[f'{addr_name}'] = tuple(tmp)
+    # Check if a user is remove 
+    for username in active_list.keys():
+      if username not in temp_name:
+        active_list.pop(username)
+        break
+  except:
+    print("Server disconnected")
   # print("addr_list: ", addr_list)
   # print("active_list: ", active_list)
   # If there is changes in the connection_list, renew it
-  for ele in addr_list:
-    [addr_name, addr] = ele.split("-")
-    temp_name.append(addr_name)
-    if global_username == addr_name or addr_name in active_list:
-      continue
-    # Parse the message to tuple for chatting later
-    tmp = addr.replace('(','').replace(')','').replace(' ','').replace('\'','').split(",")
-    tmp[1] = int(tmp[1])
-    active_list[f'{addr_name}'] = tuple(tmp)
-  # Check if a user is remove 
-  for username in active_list.keys():
-    if username not in temp_name:
-      active_list.pop(username)
-      break
   # print(active_list
   #   # active_list.append(tuple(tmp))
 

@@ -127,7 +127,6 @@ while True:
     #   server.close()
     conn,addr=server.accept()
     connection_list.append(conn)
-    print("HERE")
     # addr_list.append(addr)
     # print(addr_list)
     print("New connection [",addr,"] connected!\n")
