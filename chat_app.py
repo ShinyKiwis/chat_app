@@ -235,6 +235,8 @@ def connect_peer():                                     #listening for connectio
 
 
 def handle_register(username, password):
+  client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  client.connect(ADDR)
   client.send(f":register {username} {password}".encode(FORMAT))
   state = client.recv(SIZE).decode(FORMAT)
   return True if state == "True" else False
@@ -409,8 +411,8 @@ def app_process(control):
 
         # Handle Register 
         if event == "Register0" and current_layout == "register":
-          # print(values[3], values[4])
-          state = handle_register(values[3], values[4])
+          # print(values[2], values[3])
+          state = handle_register(values[2], values[3])
           if state == True:
             hide_register_layout()
           else:
