@@ -45,6 +45,10 @@ def on_new_connection(conn,addr):
           conn.send(str(state).encode(FORMAT))
         elif commands[0] == ":register":
           state = add_user(commands[1], commands[2])
+          name_list.append(commands[1])
+          # print(commands[3] + commands[4])
+          # print(addr_list)
+          clean_list.append(addr)
           conn.send(str(state).encode(FORMAT))
         elif commands[0] ==":get_list":
             # conn.send(str(f'{len(addr_list)} ').encode(FORMAT))
@@ -67,7 +71,8 @@ def on_new_connection(conn,addr):
             clean_idx = clean_list.index(addr)
             clean_list.pop(clean_idx)
             name_list.pop(clean_idx)
-            addr_list.pop(clean_idx)
+            if len(addr_list) != 0:
+              addr_list.pop(clean_idx)
             print("Total connection: ",len(connection_list))
             return
         elif request=="file.msg":

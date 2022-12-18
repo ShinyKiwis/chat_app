@@ -239,6 +239,7 @@ def handle_register(username, password):
   client.connect(ADDR)
   client.send(f":register {username} {password}".encode(FORMAT))
   state = client.recv(SIZE).decode(FORMAT)
+  client.send(DISCONNECT_MSG.encode(FORMAT))
   return True if state == "True" else False
 
 def handle_login(username, password):
